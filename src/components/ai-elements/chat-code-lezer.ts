@@ -31,6 +31,8 @@ const loaders: Record<string, ParserLoader> = {
     import("@codemirror/lang-php").then(
       (m) => m.php({ plain: true }).language,
     ),
+  elixir: () =>
+    import("codemirror-lang-elixir").then((m) => m.elixirLanguage),
 };
 
 // StreamParser fallback for langs without a Lezer parser. Token names emitted
@@ -124,6 +126,9 @@ const aliases: Record<string, string> = {
   py: "python",
   md: "markdown",
   htm: "html",
+  ex: "elixir",
+  exs: "elixir",
+  iex: "elixir",
   // Stream-mode aliases.
   "c++": "cpp",
   cxx: "cpp",

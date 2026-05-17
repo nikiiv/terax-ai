@@ -1,6 +1,6 @@
 mod modules;
 
-use modules::{fs, net, pty, secrets, shell, workspace};
+use modules::{fs, lsp, net, pty, secrets, shell, workspace};
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_window_state::StateFlags;
 
@@ -82,6 +82,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_opener::init())
         .manage(pty::PtyState::default())
+        .manage(lsp::LspState::default())
         .manage(shell::ShellState::default())
         .manage(secrets::SecretsState::default())
         .invoke_handler(tauri::generate_handler![
@@ -111,6 +112,11 @@ pub fn run() {
             shell::shell_bg_logs,
             shell::shell_bg_kill,
             shell::shell_bg_list,
+            lsp::lsp_start,
+            lsp::lsp_send,
+            lsp::lsp_stop,
+            lsp::lsp_resolve_elixir_ls,
+            lsp::lsp_find_project_root,
             workspace::wsl_list_distros,
             workspace::wsl_default_distro,
             workspace::wsl_home,

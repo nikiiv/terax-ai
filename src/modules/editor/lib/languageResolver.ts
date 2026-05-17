@@ -43,6 +43,14 @@ const loaders: Record<string, LanguageLoader> = {
 
   php: () => import("@codemirror/lang-php").then((m) => m.php({ plain: true })),
 
+  // Elixir (Lezer-based, returns a ready LanguageSupport — not a stream parser).
+  // .heex is HTML-templated EEx; the Elixir grammar is adequate for v1.
+  ex: () => import("codemirror-lang-elixir").then((m) => m.elixir()),
+  exs: () => import("codemirror-lang-elixir").then((m) => m.elixir()),
+  eex: () => import("codemirror-lang-elixir").then((m) => m.elixir()),
+  leex: () => import("codemirror-lang-elixir").then((m) => m.elixir()),
+  heex: () => import("codemirror-lang-elixir").then((m) => m.elixir()),
+
   // C / C++ family
   c: () => import("@codemirror/legacy-modes/mode/clike").then((m) => m.c),
   h: () => import("@codemirror/legacy-modes/mode/clike").then((m) => m.c),
