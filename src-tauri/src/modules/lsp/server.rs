@@ -82,13 +82,15 @@ fn build_command(command: &str, args: &[String]) -> Command {
     c
 }
 
-/// Spawn the server with `root` as its cwd (ElixirLS finds `mix.exs` via cwd).
+/// Spawn the server with `cwd` as its working directory — a *filesystem*
+/// path, NOT a `file://` URI (ElixirLS finds `mix.exs` via cwd; the LSP
+/// `rootUri` is a separate concern handled by the client's initialize).
 /// `on_event` receives every complete server→client message, then a single
 /// `Exited` when the process ends.
 pub fn spawn(
     command: String,
     args: Vec<String>,
-    root: String,
+    cwd: String,
     on_event: Channel<LspEvent>,
 ) -> Result<Arc<LspServer>, String> {
     if command.trim().is_empty() {
@@ -96,8 +98,13 @@ pub fn spawn(
     }
 
     let mut cmd = build_command(&command, &args);
-    if !root.is_empty() {
-        cmd.current_dir(&root);
+    if !cwd.is_empty() {
+        // A bad cwd makes Command::spawn fail with a confusing ENOENT that
+        // blames the program — validate up front for a clear error.
+        if !std::path::Path::new(&cwd).is_dir() {
+            return Err(format!("workspace cwd is not a directory: {cwd}"));
+        }
+        cmd.current_dir(&cwd);
     }
     cmd.stdin(Stdio::piped())
         .stdout(Stdio::piped())

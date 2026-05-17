@@ -20,7 +20,8 @@ export type LspConnection = {
 export async function createLspTransport(opts: {
   command: string;
   args: string[];
-  rootUri: string;
+  /** Filesystem path (process cwd) — NOT a file:// URI. */
+  cwd: string;
   onExit?: (code: number) => void;
 }): Promise<LspConnection> {
   const ch = new Channel<LspEvent>();
@@ -39,7 +40,7 @@ export async function createLspTransport(opts: {
   const id = await invoke<number>("lsp_start", {
     command: opts.command,
     args: opts.args,
-    rootUri: opts.rootUri,
+    cwd: opts.cwd,
     onEvent: ch,
   });
 

@@ -51,13 +51,16 @@ export async function acquireClient(
   const start = (async (): Promise<LSPClient | null> => {
     const status = useLspStatus.getState();
     status.setStatus(root, "starting");
+    // `root` is a filesystem path: the server's cwd. The LSP `rootUri` (a
+    // file:// URI, below) is a separate concern the client sends in
+    // `initialize` — don't pass the URI as the process cwd.
     const rootUri = pathToFileUri(root);
     let conn: LspConnection;
     try {
       conn = await createLspTransport({
         command,
         args,
-        rootUri,
+        cwd: root,
         onExit: () => {
           byRoot.delete(root);
           lastFailAt.set(root, Date.now());

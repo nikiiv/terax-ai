@@ -37,10 +37,10 @@ pub fn lsp_start(
     state: tauri::State<LspState>,
     command: String,
     args: Vec<String>,
-    root_uri: String,
+    cwd: String,
     on_event: Channel<LspEvent>,
 ) -> Result<u32, String> {
-    let server = server::spawn(command.clone(), args, root_uri, on_event).map_err(|e| {
+    let server = server::spawn(command.clone(), args, cwd, on_event).map_err(|e| {
         log::error!("lsp_start failed: {e}");
         e
     })?;
