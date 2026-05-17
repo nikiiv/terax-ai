@@ -14,14 +14,26 @@ import {
   useImperativeHandle,
   useMemo,
   useRef,
+  useState,
 } from "react";
 import { Prec } from "@codemirror/state";
 import { vim } from "@replit/codemirror-vim";
 import {
   buildSharedExtensions,
   languageCompartment,
+  lspCompartment,
   vimCompartment,
 } from "./lib/extensions";
+import {
+  acquireClient,
+  findProjectRoot,
+  isElixirFile,
+  notifyDidSave,
+  pathToFileUri,
+  releaseClient,
+  resolveElixirLs,
+  useLspStatus,
+} from "@/modules/lsp";
 import { initVimGlobals, vimHandlersExtension } from "./lib/vim";
 
 initVimGlobals();
@@ -66,6 +78,13 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
     const vimMode = usePreferencesStore((s) => s.vimMode);
     const languageRef = useRef<string | null>(null);
     const apiKeyRef = useRef<string | null>(null);
+    // Current LSP workspace root + file URI, read by the (identity-stable)
+    // save closures to fire textDocument/didSave.
+    const lspRootRef = useRef<string | null>(null);
+    const fileUriRef = useRef<string | null>(null);
+    // Bumped when the configured ElixirLS path changes so the LSP effect
+    // re-resolves without an app restart.
+    const [lspTick, setLspTick] = useState(0);
 
     useEffect(() => {
       let cancelled = false;
@@ -121,12 +140,16 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
             void (async () => {
               await saveRef.current();
               onSavedRef.current?.();
+              if (lspRootRef.current && fileUriRef.current) {
+                notifyDidSave(lspRootRef.current, fileUriRef.current);
+              }
             })();
           },
           close: () => onCloseRef.current?.(),
         })),
         ...buildSharedExtensions(),
         languageCompartment.of([]),
+        lspCompartment.of([]),
         inlineCompletion({
           getPrefs: () => {
             const s = usePreferencesStore.getState();
@@ -149,6 +172,9 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
               void (async () => {
                 await saveRef.current();
                 onSavedRef.current?.();
+                if (lspRootRef.current && fileUriRef.current) {
+                  notifyDidSave(lspRootRef.current, fileUriRef.current);
+                }
               })();
               return true;
             },
@@ -184,6 +210,75 @@ export const EditorPane = forwardRef<EditorPaneHandle, Props>(
         cancelled = true;
       };
     }, [path, doc.status]);
+
+    // Re-resolve ElixirLS when the configured path changes (no restart).
+    useEffect(() => {
+      const unsub = usePreferencesStore.subscribe((s, p) => {
+        if (s.elixirLsPath !== p.elixirLsPath) setLspTick((n) => n + 1);
+      });
+      return unsub;
+    }, []);
+
+    // ElixirLS lifecycle. One server per resolved mix.exs root, ref-counted
+    // in the LSP manager; the lsp-client plugin handles didOpen/didChange/
+    // didClose. All dynamic work goes through lspCompartment.reconfigure so
+    // the memoized extensions array never changes identity.
+    useEffect(() => {
+      const reconfigure = (ext: unknown) => {
+        cmRef.current?.view?.dispatch({
+          effects: lspCompartment.reconfigure(
+            ext as Parameters<typeof lspCompartment.reconfigure>[0],
+          ),
+        });
+      };
+      // Wait for doc.status === "ready" — CodeMirror only mounts then.
+      // Acquiring before the view exists would spawn ElixirLS just to tear it
+      // straight back down (and ElixirLS cold start costs minutes).
+      if (!isElixirFile(path) || doc.status !== "ready") {
+        reconfigure([]);
+        return;
+      }
+      let cancelled = false;
+      let acquiredRoot: string | null = null;
+      void (async () => {
+        const found = await findProjectRoot(path);
+        if (cancelled) return;
+        // Fall back to the file's directory when there's no mix.exs.
+        const root = found ?? path.replace(/[\\/][^\\/]+$/, "");
+        const loc = await resolveElixirLs();
+        if (cancelled) return;
+        if (!loc) {
+          useLspStatus.getState().setMissing(true);
+          reconfigure([]);
+          return;
+        }
+        useLspStatus.getState().setMissing(false);
+        const client = await acquireClient(root, loc.path, []);
+        if (!client) return;
+        if (cancelled) {
+          releaseClient(root);
+          return;
+        }
+        acquiredRoot = root;
+        lspRootRef.current = root;
+        fileUriRef.current = pathToFileUri(path);
+        const view = cmRef.current?.view;
+        if (!view) {
+          releaseClient(root);
+          acquiredRoot = null;
+          return;
+        }
+        reconfigure(client.plugin(fileUriRef.current));
+      })();
+      return () => {
+        cancelled = true;
+        if (acquiredRoot) releaseClient(acquiredRoot);
+        if (lspRootRef.current === acquiredRoot) {
+          lspRootRef.current = null;
+          fileUriRef.current = null;
+        }
+      };
+    }, [path, doc.status, lspTick]);
 
     useImperativeHandle(
       ref,

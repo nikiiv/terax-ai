@@ -26,6 +26,7 @@ import {
   setShowHidden,
   setTerminalFontSize,
   setTerminalScrollback,
+  setElixirLsPath,
   setTerminalWebglEnabled,
   setVimMode,
   type EditorThemeId,
@@ -39,7 +40,8 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Input } from "@/components/ui/input";
 import { SectionHeader } from "../components/SectionHeader";
 import { SettingRow } from "../components/SettingRow";
 
@@ -65,6 +67,9 @@ export function GeneralSection() {
   );
   const terminalFontSize = usePreferencesStore((s) => s.terminalFontSize);
   const terminalScrollback = usePreferencesStore((s) => s.terminalScrollback);
+  const elixirLsPath = usePreferencesStore((s) => s.elixirLsPath);
+  const [elixirLsDraft, setElixirLsDraft] = useState(elixirLsPath);
+  useEffect(() => setElixirLsDraft(elixirLsPath), [elixirLsPath]);
 
   // Reconcile autostart pref with the actual OS state on mount — the user may
   // have toggled it from System Settings.
@@ -317,6 +322,28 @@ export function GeneralSection() {
             <Switch
               checked={restoreWindowState}
               onCheckedChange={(v) => void setRestoreWindowState(v)}
+            />
+          </SettingRow>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <Label>Language servers</Label>
+        <div className="flex flex-col gap-2">
+          <SettingRow
+            title="Elixir LS path"
+            description="Path to the ElixirLS launcher (language_server.sh / .bat or an elixir-ls shim). Leave blank to auto-detect from PATH and common install locations."
+          >
+            <Input
+              className="w-72"
+              placeholder="Auto-detect"
+              spellCheck={false}
+              value={elixirLsDraft}
+              onChange={(e) => setElixirLsDraft(e.target.value)}
+              onBlur={() => {
+                const v = elixirLsDraft.trim();
+                if (v !== elixirLsPath) void setElixirLsPath(v);
+              }}
             />
           </SettingRow>
         </div>
